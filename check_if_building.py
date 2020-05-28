@@ -80,10 +80,9 @@ project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 
 def isThereAnotherJobRunning():
-    # simple check if there's already a pipeline
-    # running for this specific branch name
-    branchName = os.getenv('CI_COMMIT_REF_NAME')
-    return sum([1 for pipe in project.pipelines.list() if pipe.attributes['ref'] == branchName and pipe.attributes['status'] == 'running']) > 1
+    # simple check if there's already a pipeline running
+
+    return sum([1 for pipe in project.pipelines.list() if pipe.attributes['status'] == 'running']) > 1
 
 
 didWeSleepFullCycle = False
