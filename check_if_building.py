@@ -9,11 +9,11 @@ from gitlab import Gitlab
 # TODO: - threading aka replace sleeps?
 
 # sleep params
-FULL_CYCLE_SLEEP = 600  # 10m
+FULL_CYCLE_SLEEP = 300  # 5m
 SECONDARY_CYCLE_SLEEP = 60  # 1m
 
 # TODO: 'service' account?
-# currently using personal access token
+# currently using d.silva access token
 
 # handles gitlab specific stuff, url/token/project_id
 # CI_PROJECT_URL = http(s)://gitlab_url_here/
@@ -51,12 +51,12 @@ def checkAndCancelIfNeeded():
                   if item.sha == selfSHA), -1)
 
     # and if we're not the first one, we cancel ourselves!
-    if index is not 0:
+    if index is not 0 and index is not -1:
         print('i\'m old, cancelling myself and exiting cleanly.')
         pl = project.pipelines.get(result[index].id)
         pl.cancel()
         exit(0)
-    else:
+    elif index is 0 and index is not -1:
         # if we are actually 0 we look for other jobs
         # currently running/scheduled and if found,
         # we cancel them.
@@ -64,7 +64,7 @@ def checkAndCancelIfNeeded():
                   == 'running' or pipe.attributes['status'] == 'pending']
 
         for pipe in result:
-            print("Cancelling pipeline with job id: {}".format(pipe.id))
+            print("Cancelling pipeline with id: {}".format(pipe.id))
             pl = project.pipelines.get(pipe.id)
             pl.cancel()
             # small wait for all the potential pipeline cancels
@@ -80,9 +80,25 @@ project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 
 def isThereAnotherJobRunning():
-    # simple check if there's already a pipeline running
+    # gets current commit SHA hash
+    selfSHA = os.getenv('CI_COMMIT_SHA')
 
-    return sum([1 for pipe in project.pipelines.list() if pipe.attributes['status'] == 'running']) > 1
+    add = 0
+
+    result = [pipe for pipe in project.pipelines.list() if pipe.attributes['sha'] != selfSHA and pipe.attributes['status']
+              == 'running' or pipe.attributes['status'] == 'pending']
+
+    for pipe in result:
+        print("Grabbing jobs with pipeline id: {}".format(pipe.id))
+        pl = project.pipelines.get(pipe.id)
+        jobs = pl.jobs.list()
+
+        job = [j for j in jobs if j.attributes['stage'] != "check_if_building"]
+
+        if job:
+            add = add + 1
+
+    return add > 1
 
 
 didWeSleepFullCycle = False
@@ -105,8 +121,7 @@ while isThereAnotherJobRunning():
         time.sleep(FULL_CYCLE_SLEEP)
         didWeSleepFullCycle = True
     else:
-        # otherwise, we step down to 10m since
-        # the avg buildtime for us is 10m.
+        # otherwise, we step down to SECONDARY_CYCLE_SLEEP
         if firstSecondCycleMessage is True:
             format_list = [FULL_CYCLE_SLEEP / 60, SECONDARY_CYCLE_SLEEP / 60]
             print("{:.0f} minutes have elapsed. Waiting for {:.0f} minute from now on.".format(
