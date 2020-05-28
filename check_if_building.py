@@ -13,7 +13,7 @@ FULL_CYCLE_SLEEP = 300  # 5m
 SECONDARY_CYCLE_SLEEP = 60  # 1m
 
 # TODO: 'service' account?
-# currently using d.silva access token
+# currently using personal access token
 
 # handles gitlab specific stuff, url/token/project_id
 # CI_PROJECT_URL = http(s)://gitlab_url_here/
