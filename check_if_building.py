@@ -9,11 +9,11 @@ from gitlab import Gitlab
 # TODO: - threading aka replace sleeps?
 
 # sleep params
-FULL_CYCLE_SLEEP = 300  # 5m
+FULL_CYCLE_SLEEP = 600  # 10m
 SECONDARY_CYCLE_SLEEP = 60  # 1m
 
 # TODO: 'service' account?
-# currently using d.silva access token
+# currently using personal access token
 
 # handles gitlab specific stuff, url/token/project_id
 # CI_PROJECT_URL = http(s)://gitlab_url_here/
@@ -89,6 +89,9 @@ didWeSleepFullCycle = False
 firstSecondCycleMessage = True
 
 while isThereAnotherJobRunning():
+    # refresh the project
+    project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
+
     # if we found a job running,
     # we recheck if we need to cancel
     # ourselves or others
