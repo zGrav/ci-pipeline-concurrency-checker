@@ -83,21 +83,30 @@ def isThereAnotherJobRunning():
     # gets current commit SHA hash
     selfSHA = os.getenv('CI_COMMIT_SHA')
 
+    # initiate counter for running jobs
     add = 0
 
+    # gets all running pipelines
+    # that are not self
+    # and are running
+    # or pending
     result = [pipe for pipe in project.pipelines.list() if pipe.attributes['sha'] != selfSHA and pipe.attributes['status']
               == 'running' or pipe.attributes['status'] == 'pending']
 
+    # we grab each pipeline jobs
     for pipe in result:
         print("Grabbing jobs with pipeline id: {}".format(pipe.id))
         pl = project.pipelines.get(pipe.id)
         jobs = pl.jobs.list()
 
+        # and we check if their stage is not check_if_building
         job = [j for j in jobs if j.attributes['stage'] != "check_if_building"]
-
+        
+        # if not, we add to counter :)
         if job:
             add = add + 1
 
+    # and proceed to return
     return add > 0
 
 
