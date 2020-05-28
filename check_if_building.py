@@ -9,7 +9,7 @@ from gitlab import Gitlab
 # TODO: - threading aka replace sleeps?
 
 # sleep params
-FULL_CYCLE_SLEEP = 600  # 10m
+FULL_CYCLE_SLEEP = 300  # 5m
 SECONDARY_CYCLE_SLEEP = 60  # 1m
 
 # TODO: 'service' account?
