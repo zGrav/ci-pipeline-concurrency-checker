@@ -98,7 +98,7 @@ def isThereAnotherJobRunning():
         if job:
             add = add + 1
 
-    return add > 1
+    return add > 0
 
 
 didWeSleepFullCycle = False
