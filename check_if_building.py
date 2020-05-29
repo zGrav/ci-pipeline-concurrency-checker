@@ -50,13 +50,19 @@ def checkAndCancelIfNeeded():
     index = next((i for i, item in enumerate(result)
                   if item.sha == selfSHA), -1)
 
+    if index == -1:
+        print('i\'m very old and out of scope, cancelling myself and exiting cleanly.')
+        pl = project.pipelines.get(result[index].id)
+        pl.cancel()
+        exit(0)
+
     # and if we're not the first one, we cancel ourselves!
-    if index is not 0 and index is not -1:
+    if index != 0 and index != -1:
         print('i\'m old, cancelling myself and exiting cleanly.')
         pl = project.pipelines.get(result[index].id)
         pl.cancel()
         exit(0)
-    elif index is 0 and index is not -1:
+    elif index == 0 and index != -1:
         # if we are actually 0 we look for other jobs
         # currently running/scheduled and if found,
         # we cancel them.
@@ -80,9 +86,6 @@ project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 
 def isThereAnotherJobRunning():
-    # gets current commit SHA hash
-    selfSHA = os.getenv('CI_COMMIT_SHA')
-
     # initiate counter for running jobs
     add = 0
 
@@ -90,8 +93,8 @@ def isThereAnotherJobRunning():
     # that are not self
     # and are running
     # or pending
-    result = [pipe for pipe in project.pipelines.list() if pipe.attributes['sha'] != selfSHA and pipe.attributes['status']
-              == 'running' or pipe.attributes['status'] == 'pending']
+    result = [pipe for pipe in project.pipelines.list(
+    ) if pipe.attributes['status'] == 'running' or pipe.attributes['status'] == 'pending']
 
     # we grab each pipeline jobs
     for pipe in result:
@@ -99,15 +102,37 @@ def isThereAnotherJobRunning():
         pl = project.pipelines.get(pipe.id)
         jobs = pl.jobs.list()
 
+        # we get all check_if_building
+        wait = [j for j in jobs if j.attributes['stage'] == "check_if_building"]
+
         # and we check if their stage is not check_if_building
         job = [j for j in jobs if j.attributes['stage'] != "check_if_building"]
-        
+
         # if not, we add to counter :)
         if job:
             add = add + 1
 
+        # if no jobs running and waiting is > 1
+        if wait and not job:
+            print("We found only check_if_building job stages")
+
+            # gets current commit SHA hash
+            selfSHA = os.getenv('CI_COMMIT_SHA')
+
+            # gets where we are in the filtered array
+            index = next((i for i, item in enumerate(wait)
+                          if item.sha == selfSHA), -1)
+
+            # if we are the last item of the array
+            # it's our turn to build
+            if index == (len(wait) - 1) and index != -1:
+                print(
+                    "I'm the last entry on the wait list, time for me to shine and build")
+                return False
+
     # and proceed to return
-    return add > 0
+    # 1 because of self
+    return add > 1
 
 
 didWeSleepFullCycle = False
@@ -122,7 +147,7 @@ while isThereAnotherJobRunning():
     # ourselves or others
     checkAndCancelIfNeeded()
 
-    if didWeSleepFullCycle is not True:
+    if didWeSleepFullCycle != True:
         # if we didn't go through FULL_CYCLE_SLEEP,
         # we do it
         print(
@@ -131,7 +156,7 @@ while isThereAnotherJobRunning():
         didWeSleepFullCycle = True
     else:
         # otherwise, we step down to SECONDARY_CYCLE_SLEEP
-        if firstSecondCycleMessage is True:
+        if firstSecondCycleMessage == True:
             format_list = [FULL_CYCLE_SLEEP / 60, SECONDARY_CYCLE_SLEEP / 60]
             print("{:.0f} minutes have elapsed. Waiting for {:.0f} minute from now on.".format(
                 *format_list))
