@@ -101,8 +101,9 @@ def isThereAnotherPipeRunning():
 
     # we grab each pipeline
     for pipe in result:
-
-        if pipe.attributes['stage'] == "check_if_running":
+        # get this pipe check_if_running stage
+        firstJob = pipe.jobs.list()[0]
+        if firstJob.attributes['stage'] == "check_if_running" and firstJob.attributes['status'].attributes['text'] == 'running':
             wait = wait + 1
         else:
             add = add + 1
