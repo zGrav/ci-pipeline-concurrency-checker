@@ -30,7 +30,7 @@ project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 
 def checkAndCancelIfNeeded():
-    # cancels self or other jobs if needed :)
+    # cancels self or other pipelines if needed :)
 
     # gets name of branch being deployed
     branchName = os.getenv('CI_COMMIT_REF_NAME')
@@ -63,7 +63,7 @@ def checkAndCancelIfNeeded():
         pl.cancel()
         exit(0)
     elif index == 0 and index != -1:
-        # if we are actually 0 we look for other jobs
+        # if we are actually 0 we look for other pipes
         # currently running/scheduled and if found,
         # we cancel them.
         result = [pipe for pipe in result if pipe.attributes['sha'] != selfSHA and pipe.attributes['status']
@@ -78,16 +78,19 @@ def checkAndCancelIfNeeded():
 
 
 # we check if should cancel ourselves
-# or older jobs first :)
+# or older pipes first :)
 checkAndCancelIfNeeded()
 
 # refresh the project
 project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 
-def isThereAnotherJobRunning():
-    # initiate counter for running jobs
+def isThereAnotherPipeRunning():
+    # initiate counter for running pipes
     add = 0
+
+    # initiate counter for waiting pipes
+    wait = 0
 
     # gets all running pipelines
     # that are not self
@@ -96,53 +99,49 @@ def isThereAnotherJobRunning():
     result = [pipe for pipe in project.pipelines.list(
     ) if pipe.attributes['status'] == 'running' or pipe.attributes['status'] == 'pending']
 
-    # we grab each pipeline jobs
+    # we grab each pipeline
     for pipe in result:
-        print("Grabbing jobs with pipeline id: {}".format(pipe.id))
-        pl = project.pipelines.get(pipe.id)
-        jobs = pl.jobs.list()
 
-        # we get all check_if_building
-        wait = [j for j in jobs if j.attributes['stage'] == "check_if_building"]
-
-        # and we check if their stage is not check_if_building
-        job = [j for j in jobs if j.attributes['stage'] != "check_if_building"]
-
-        # if not, we add to counter :)
-        if job:
+        if pipe.attributes['stage'] == "check_if_running":
+            wait = wait + 1
+        else:
             add = add + 1
 
-        # if no jobs running and waiting is > 1
-        if wait and not job:
-            print("We found only check_if_building job stages")
+    if wait == 0 and add == 0:
+        print("Nothing found, moving on")
+        return False
 
-            # gets current commit SHA hash
-            selfSHA = os.getenv('CI_COMMIT_SHA')
+    if wait > 0 and add == 0:
+        print("Only found waiting pipes, checking if it's time")
 
-            # gets where we are in the filtered array
-            index = next((i for i, item in enumerate(wait)
-                          if item.sha == selfSHA), -1)
+        # gets current commit SHA hash
+        selfSHA = os.getenv('CI_COMMIT_SHA')
 
-            # if we are the last item of the array
-            # it's our turn to build
-            if index == (len(wait) - 1) and index != -1:
-                print(
-                    "I'm the last entry on the wait list, time for me to shine and build")
-                return False
+        wait = [p for p in result if p.attributes['stage']
+                == "check_if_building"]
 
-    # and proceed to return
-    # 1 because of self
-    return add > 1
+        # gets where we are in the filtered array
+        index = next((i for i, item in enumerate(wait)
+                      if item.sha == selfSHA), -1)
+
+        # if we are the last item of the array
+        # it's our turn to build
+        if index == (len(wait) - 1) and index != -1:
+            print(
+                "I'm the last entry on the wait list, time for me to shine and build")
+            return False
+    else:
+        return add > 1
 
 
 didWeSleepFullCycle = False
 firstSecondCycleMessage = True
 
-while isThereAnotherJobRunning():
+while isThereAnotherPipeRunning():
     # refresh the project
     project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
-    # if we found a job running,
+    # if we found a pipe running,
     # we recheck if we need to cancel
     # ourselves or others
     checkAndCancelIfNeeded()
@@ -151,7 +150,7 @@ while isThereAnotherJobRunning():
         # if we didn't go through FULL_CYCLE_SLEEP,
         # we do it
         print(
-            "A job is running, waiting for {:.0f} minutes since it's the average build time!".format(FULL_CYCLE_SLEEP / 60))
+            "A pipe is running, waiting for {:.0f} minutes since it's the average build time!".format(FULL_CYCLE_SLEEP / 60))
         time.sleep(FULL_CYCLE_SLEEP)
         didWeSleepFullCycle = True
     else:
@@ -162,8 +161,8 @@ while isThereAnotherJobRunning():
                 *format_list))
             firstSecondCycleMessage = False
 
-        print("A job is still running...")
+        print("A pipeline is still running...")
         time.sleep(SECONDARY_CYCLE_SLEEP)
 
-print("No jobs found running, will execute this pipeline now :)")
+print("No pipelines found running, will execute this pipeline now :)")
 exit(0)
