@@ -130,6 +130,9 @@ def isThereAnotherPipeRunning():
             print(
                 "I'm the last entry on the wait list, time for me to shine and build")
             return False
+        else:
+            print("Not my time just yet")
+            return True
     else:
         return add > 1
 
