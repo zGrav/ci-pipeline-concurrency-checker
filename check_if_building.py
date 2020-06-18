@@ -6,8 +6,6 @@ from sys import exit
 from urllib.parse import urlparse
 from gitlab import Gitlab
 
-# TODO: - threading aka replace sleeps?
-
 # sleep params
 FULL_CYCLE_SLEEP = 300  # 5m
 SECONDARY_CYCLE_SLEEP = 60  # 1m
@@ -27,6 +25,9 @@ gl = Gitlab(URL.scheme + "://" + URL.netloc,
             private_token=os.getenv("ACCESS_TOKEN"))
 
 project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
+
+print("Grabbing project with ID: {}".format(
+    os.getenv("CI_PROJECT_ID")), flush=True)
 
 
 def checkAndCancelIfNeeded():
@@ -51,14 +52,14 @@ def checkAndCancelIfNeeded():
                   if item.sha == selfSHA), -1)
 
     if index == -1:
-        print('i\'m very old and out of scope, cancelling myself and exiting cleanly.')
+        print('i\'m very old and out of scope, cancelling myself and exiting cleanly.', flush=True)
         pl = project.pipelines.get(result[index].id)
         pl.cancel()
         exit(0)
 
     # and if we're not the first one, we cancel ourselves!
     if index != 0 and index != -1:
-        print('i\'m old, cancelling myself and exiting cleanly.')
+        print('i\'m old, cancelling myself and exiting cleanly.', flush=True)
         pl = project.pipelines.get(result[index].id)
         pl.cancel()
         exit(0)
@@ -70,7 +71,7 @@ def checkAndCancelIfNeeded():
                   == 'running' or pipe.attributes['status'] == 'pending']
 
         for pipe in result:
-            print("Cancelling pipeline with id: {}".format(pipe.id))
+            print("Cancelling pipeline with id: {}".format(pipe.id), flush=True)
             pl = project.pipelines.get(pipe.id)
             pl.cancel()
             # small wait for all the potential pipeline cancels
@@ -86,6 +87,9 @@ project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
 
 
 def isThereAnotherPipeRunning():
+    # refresh the project
+    project = gl.projects.get(os.getenv("CI_PROJECT_ID"))
+
     # initiate counter for running pipes
     add = 0
 
@@ -101,41 +105,58 @@ def isThereAnotherPipeRunning():
 
     # we grab each pipeline
     for pipe in result:
-        # get this pipe first job which should be check_if_running
-        firstJob = pipe.jobs.list()[0]
-        if firstJob.attributes['stage'] == "check_if_running" and firstJob.attributes['status'].attributes['text'] == 'running':
-            wait = wait + 1
-        else:
-            add = add + 1
+        # get this pipe jobs
+        jobs = pipe.jobs.list()
+
+        for job in jobs:
+            if job.stage == "check_if_building" and job.status == 'running':
+                wait = wait + 1
+            elif job.status == "running":
+                add = add + 1
 
     if wait == 0 and add == 0:
-        print("Nothing found, moving on")
+        print("Nothing found, moving on", flush=True)
         return False
 
     if wait > 0 and add == 0:
-        print("Only found waiting pipes, checking if it's time")
+        print("Only found waiting pipes, checking if it's time", flush=True)
 
         # gets current commit SHA hash
         selfSHA = os.getenv('CI_COMMIT_SHA')
 
-        wait = [p for p in result if p.attributes['stage']
-                == "check_if_building"]
+        result = [pipe for pipe in project.pipelines.list(
+        ) if pipe.attributes['status'] == 'running' or pipe.attributes['status'] == 'pending']
+
+        waitItems = []
+
+        # we grab each pipeline
+        for pipe in result:
+            # get this pipe jobs
+            jobs = pipe.jobs.list()
+
+            for job in jobs:
+                if job.stage == "check_if_building" and job.status == 'running':
+                    waitItems.append(job)
 
         # gets where we are in the filtered array
-        index = next((i for i, item in enumerate(wait)
-                      if item.sha == selfSHA), -1)
+        index = -1
+
+        for idx, item in enumerate(waitItems):
+            if item.pipeline['sha'] == selfSHA:
+                index = idx
+                break
 
         # if we are the last item of the array
         # it's our turn to build
-        if index == (len(wait) - 1) and index != -1:
+        if index == (len(waitItems) - 1) and index != -1:
             print(
-                "I'm the last entry on the wait list, time for me to shine and build")
+                "I'm the last entry on the waitItems list, time for me to shine and build", flush=True)
             return False
         else:
-            print("Not my time just yet")
+            print("Not my time just yet", flush=True)
             return True
-    else:
-        return add > 1
+
+    return add > 1
 
 
 didWeSleepFullCycle = False
@@ -154,7 +175,7 @@ while isThereAnotherPipeRunning():
         # if we didn't go through FULL_CYCLE_SLEEP,
         # we do it
         print(
-            "A pipe is running, waiting for {:.0f} minutes since it's the average build time!".format(FULL_CYCLE_SLEEP / 60))
+            "A pipe is running, waiting for {:.0f} minutes since it's the average build time!".format(FULL_CYCLE_SLEEP / 60), flush=True)
         time.sleep(FULL_CYCLE_SLEEP)
         didWeSleepFullCycle = True
     else:
@@ -162,11 +183,11 @@ while isThereAnotherPipeRunning():
         if firstSecondCycleMessage == True:
             format_list = [FULL_CYCLE_SLEEP / 60, SECONDARY_CYCLE_SLEEP / 60]
             print("{:.0f} minutes have elapsed. Waiting for {:.0f} minute from now on.".format(
-                *format_list))
+                *format_list), flush=True)
             firstSecondCycleMessage = False
 
-        print("A pipeline is still running...")
+        print("A pipeline is still running...", flush=True)
         time.sleep(SECONDARY_CYCLE_SLEEP)
 
-print("No pipelines found running, will execute this pipeline now :)")
+print("No pipelines found running, will execute this pipeline now :)", flush=True)
 exit(0)
