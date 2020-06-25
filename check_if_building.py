@@ -156,7 +156,7 @@ def isThereAnotherPipeRunning():
             print("Not my time just yet", flush=True)
             return True
 
-    return add > 1
+    return add > 0
 
 
 didWeSleepFullCycle = False
